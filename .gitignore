@@ -36,6 +36,14 @@ yarn-error.log*
 !.env.local.example
 !.env.example
 
+# secrets & keys
+*.pem
+*.key
+*.cert
+secret.json
+credentials.json
+auth.json
+
 # vercel
 .vercel
 
