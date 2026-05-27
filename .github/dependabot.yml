@@ -8,10 +8,6 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    reviewers:
-      - ArnasDon
-    labels:
-      - dependencies
     groups:
       # Batch related upgrades into one PR so we're not closing six
       # independent Supabase-bumps per week.
@@ -37,7 +33,8 @@ updates:
       - dependency-name: react-dom
       - dependency-name: tailwindcss
       - dependency-name: eslint-config-next
-
+      # ESLint 10 breaks compatibility with eslint-config-next plugins
+      - dependency-name: eslint
   # GitHub Actions in .github/workflows/. Catches setup-node /
   # checkout version bumps that keep the CI matrix healthy.
   - package-ecosystem: github-actions
@@ -46,8 +43,3 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 3
-    reviewers:
-      - ArnasDon
-    labels:
-      - dependencies
-      - github-actions

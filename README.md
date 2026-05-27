@@ -100,3 +100,21 @@ rather than here. Details in
 ## License
 
 [MIT](./LICENSE). Fork it, brand it, host it.
+
+## Git Workflow & Deployment
+
+We use a structured Gitflow approach to ensure stability for this AI-powered SaaS platform.
+
+### Branching Strategy
+- **`main`**: Production environment. Only accepts merges from `develop` (for releases) or `hotfix/*` branches.
+- **`develop`**: Staging environment. All `feature/*` branches merge here.
+
+### Deployment Flow
+- **Staging**: Merges into the `develop` branch automatically trigger deployments to the Staging environment.
+- **Production**: Creating a Pull Request from `develop` to `main` and merging it triggers the Production deployment.
+
+### Future Development Rules
+- **No direct commits** to `main` or `develop`.
+- Always branch off `develop` for new work (`feature/...`).
+- Keep commits clean, semantic, and modular.
+- Refer to [CONTRIBUTING.md](./CONTRIBUTING.md) for full branch naming conventions and PR guidelines.
