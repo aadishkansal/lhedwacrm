@@ -15,14 +15,14 @@ import {
   loadMetrics,
   loadPipelineDonut,
   loadResponseTime,
-} from '@/lib/dashboard/queries'
+} from '@/modules/analytics/services/queries'
 import type {
   ActivityItem,
   ConversationsSeriesPoint,
   MetricsBundle,
   PipelineDonutData,
   ResponseTimeSummary,
-} from '@/lib/dashboard/types'
+} from '@/modules/analytics/services/types'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { SkeletonCard } from '@/components/dashboard/skeleton'

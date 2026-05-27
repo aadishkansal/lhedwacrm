@@ -37,8 +37,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
-import { triggerMeta, formatRelative } from "@/lib/automations/trigger-meta"
+import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/modules/workflows/services/templates"
+import { triggerMeta, formatRelative } from "@/modules/workflows/services/trigger-meta"
 import { cn } from "@/lib/utils"
 
 const TEMPLATE_ORDER: TemplateSlug[] = [

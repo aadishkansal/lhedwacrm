@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { supabaseAdmin } from '@/lib/automations/admin-client'
-import { getTemplate } from '@/lib/automations/templates'
-import { insertSteps, type BuilderStepInput } from '@/lib/automations/steps-tree'
+import { supabaseAdmin } from '@/modules/workflows/services/admin-client'
+import { getTemplate } from '@/modules/workflows/services/templates'
+import { insertSteps, type BuilderStepInput } from '@/modules/workflows/services/steps-tree'
 import {
   validateStepsForActivation,
   validateTriggerForActivation,
-} from '@/lib/automations/validate'
+} from '@/modules/workflows/services/validate'
 
 export async function GET() {
   const supabase = await createClient()

@@ -64,8 +64,8 @@ import { cn } from "@/lib/utils";
 import {
   validateFlowForActivation,
   type ValidationIssue,
-} from "@/lib/flows/validate";
-import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
+} from "@/modules/workflows/flows/validate";
+import type { FlowNodeRow, FlowRow } from "@/modules/workflows/flows/types";
 
 interface FlowBuilderProps {
   initialFlow: FlowRow;

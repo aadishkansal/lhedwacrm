@@ -19,7 +19,7 @@ import type {
 } from "@/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { formatRelative } from "@/lib/automations/trigger-meta"
+import { formatRelative } from "@/modules/workflows/services/trigger-meta"
 
 export default function AutomationLogsPage({
   params,

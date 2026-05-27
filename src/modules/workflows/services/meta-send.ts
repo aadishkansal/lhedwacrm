@@ -1,11 +1,11 @@
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { sendTextMessage, sendTemplateMessage } from '@/modules/whatsapp/services/meta-api'
+import { decrypt } from '@/modules/whatsapp/services/encryption'
 import {
   sanitizePhoneForMeta,
   isValidE164,
   phoneVariants,
   isRecipientNotAllowedError,
-} from '@/lib/whatsapp/phone-utils'
+} from '@/modules/whatsapp/services/phone-utils'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------

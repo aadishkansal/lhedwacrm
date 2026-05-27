@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
-import type { ConversationsSeriesPoint } from '@/lib/dashboard/types'
+import type { ConversationsSeriesPoint } from '@/modules/analytics/services/types'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 import { cn } from '@/lib/utils'

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
-import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
-import { normalizePhone, phonesMatch } from '@/lib/whatsapp/phone-utils'
-import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger } from '@/lib/automations/engine'
-import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { decrypt, encrypt, isLegacyFormat } from '@/modules/whatsapp/services/encryption'
+import { getMediaUrl, downloadMedia } from '@/modules/whatsapp/services/meta-api'
+import { normalizePhone, phonesMatch } from '@/modules/whatsapp/services/phone-utils'
+import { verifyMetaWebhookSignature } from '@/modules/whatsapp/services/webhook-signature'
+import { runAutomationsForTrigger } from '@/modules/workflows/services/engine'
+import { dispatchInboundToFlows } from '@/modules/workflows/flows/engine'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

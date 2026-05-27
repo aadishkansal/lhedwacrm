@@ -1,7 +1,7 @@
 "use client"
 
 import { GitBranch } from 'lucide-react'
-import type { PipelineDonutData } from '@/lib/dashboard/types'
+import type { PipelineDonutData } from '@/modules/analytics/services/types'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 

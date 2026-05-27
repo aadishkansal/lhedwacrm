@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { FlowBuilder } from "@/components/flows/flow-builder";
-import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
+import type { FlowRow, FlowNodeRow } from "@/modules/workflows/flows/types";
 
 /**
  * Flow editor shell.

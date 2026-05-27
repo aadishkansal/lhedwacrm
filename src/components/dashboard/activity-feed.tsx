@@ -11,7 +11,7 @@ import {
   Inbox,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
-import type { ActivityItem, ActivityKind } from '@/lib/dashboard/types'
+import type { ActivityItem, ActivityKind } from '@/modules/analytics/services/types'
 import { cn } from '@/lib/utils'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'

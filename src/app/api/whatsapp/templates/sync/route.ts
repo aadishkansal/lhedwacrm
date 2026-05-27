@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { decrypt } from '@/modules/whatsapp/services/encryption'
 
 /**
  * Sync message templates from Meta → local message_templates table.

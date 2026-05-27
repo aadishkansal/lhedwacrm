@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/automations/admin-client'
-import { resumePendingExecution } from '@/lib/automations/engine'
-import type { AutomationContext } from '@/lib/automations/engine'
+import { supabaseAdmin } from '@/modules/workflows/services/admin-client'
+import { resumePendingExecution } from '@/modules/workflows/services/engine'
+import type { AutomationContext } from '@/modules/workflows/services/engine'
 
 /**
  * Drain due `automation_pending_executions` rows. Meant to be hit

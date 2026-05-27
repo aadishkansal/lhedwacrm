@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { validateFlowForActivation } from '@/lib/flows/validate'
+import { supabaseAdmin } from '@/modules/workflows/flows/admin-client'
+import { validateFlowForActivation } from '@/modules/workflows/flows/validate'
 
 /**
  * POST /api/flows/[id]/activate
