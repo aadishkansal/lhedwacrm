@@ -19,6 +19,7 @@ export const THEME_IDS = [
   "cobalt",
   "amber",
   "rose",
+  "light",
 ] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
@@ -70,6 +71,12 @@ export const THEMES: ReadonlyArray<ThemeMeta> = [
     name: "Rose",
     tagline: "Bold and modern — D2C, creator-economy, lifestyle.",
     swatch: "oklch(0.645 0.22 16)",
+  },
+  {
+    id: "light",
+    name: "Daylight",
+    tagline: "Clean, crisp light theme designed for bright workspaces.",
+    swatch: "oklch(0.55 0.22 260)",
   },
 ];
 

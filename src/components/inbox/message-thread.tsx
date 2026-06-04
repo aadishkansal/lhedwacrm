@@ -21,9 +21,19 @@ import {
   Clock,
   ArrowLeft,
   RefreshCw,
+  AlertTriangle,
+  Combine,
+  CheckCircle2,
+  Zap,
+  Loader2,
+  Bot,
+  BotOff,
+  MoreHorizontal,
+  Info,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +42,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ContactSidebar } from "./contact-sidebar";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
 import { MessageComposer } from "./message-composer";
@@ -87,6 +107,10 @@ interface MessageThreadProps {
    * working; the button is only rendered when this is provided.
    */
   onRefresh?: () => void;
+  onBotActiveChange?: (
+    conversationId: string,
+    isBotActive: boolean,
+  ) => void;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -128,8 +152,7 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
  * Defined once at module scope so the two render paths can't drift —
  * if we ever switch the asset, both spots update together.
  */
-const DOODLE_BG_CLASSES =
-  "bg-slate-950 bg-[url('/inbox-doodle.svg')] bg-repeat";
+const DOODLE_BG_CLASSES = "bg-slate-950";
 
 export function MessageThread({
   conversation,
@@ -143,6 +166,7 @@ export function MessageThread({
   onBack,
   resyncToken = 0,
   onRefresh,
+  onBotActiveChange,
 }: MessageThreadProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -173,6 +197,14 @@ export function MessageThread({
     }, 700);
   }, [isRefreshing, onRefresh]);
   const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null);
+
+  // Merge dialog state
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedSourceConv, setSelectedSourceConv] = useState<any | null>(null);
+  const [merging, setMerging] = useState(false);
 
   // Profiles are bounded by RLS to rows the current user is allowed to
   // see — today that's just the current user, but the dropdown keeps the
@@ -477,16 +509,55 @@ export function MessageThread({
     async (status: ConversationStatus) => {
       if (!conversation) return;
 
-      const supabase = createClient();
-      await supabase
-        .from("conversations")
-        .update({ status })
-        .eq("id", conversation.id);
-
-      onStatusChange(conversation.id, status);
+      try {
+        const res = await fetch(`/api/conversations/${conversation.id}/actions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "status", status })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to update status");
+        }
+        onStatusChange(conversation.id, status);
+      } catch (err: any) {
+        console.error("Failed to update status:", err);
+        toast.error(err.message || "Failed to update status");
+      }
     },
     [conversation, onStatusChange]
   );
+
+  const handleResolveToggle = useCallback(async () => {
+    if (!conversation) return;
+    const newStatus = conversation.status === "closed" ? "open" : "closed";
+    await handleStatusChange(newStatus);
+    toast.success(newStatus === "closed" ? "Conversation resolved" : "Conversation reopened");
+  }, [conversation, handleStatusChange]);
+
+  const handleEscalate = useCallback(async () => {
+    if (!conversation) return;
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "escalate" })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to escalate");
+      }
+      onStatusChange(conversation.id, "pending");
+      onAssignChange(conversation.id, null);
+      toast.success("Escalated to Supervisor Agent");
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      console.error("Failed to escalate:", err);
+      toast.error(err.message || "Failed to escalate");
+    }
+  }, [conversation, onStatusChange, onAssignChange, onRefresh]);
 
   const handleOpenTemplates = useCallback(() => {
     setTemplateModalOpen(true);
@@ -656,38 +727,149 @@ export function MessageThread({
     async (agentId: string | null) => {
       if (!conversation) return;
 
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("conversations")
-        .update({ assigned_agent_id: agentId })
-        .eq("id", conversation.id);
-
-      if (error) {
-        console.error("Failed to update assignment:", error);
-        toast.error("Failed to update assignment");
-        return;
+      try {
+        const res = await fetch(`/api/conversations/${conversation.id}/actions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "assign",
+            assignedAgentId: agentId === null ? "unassigned" : agentId
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to update assignment");
+        }
+        onAssignChange(conversation.id, agentId);
+      } catch (err: any) {
+        console.error("Failed to update assignment:", err);
+        toast.error(err.message || "Failed to update assignment");
       }
-
-      onAssignChange(conversation.id, agentId);
     },
     [conversation, onAssignChange],
   );
+
+  const handleToggleBot = useCallback(async () => {
+    if (!conversation) return;
+    const nextActive = !conversation.is_bot_active;
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle-bot",
+          isBotActive: nextActive
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to toggle bot");
+      }
+      onBotActiveChange?.(conversation.id, nextActive);
+      toast.success(nextActive ? "AI Auto-reply activated" : "AI Auto-reply deactivated (Human Mode)");
+    } catch (err: any) {
+      console.error("Failed to toggle bot:", err);
+      toast.error(err.message || "Failed to toggle bot");
+    }
+  }, [conversation, onBotActiveChange]);
+
+  const handleSearchMergeContacts = useCallback(async (query: string) => {
+    if (!query.trim() || !conversation) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const supabase = createClient();
+      
+      // Get current user's organization first
+      const { data: orgUser } = await supabase
+        .from("organization_users")
+        .select("organization_id")
+        .limit(1)
+        .maybeSingle();
+      
+      if (!orgUser) {
+        setSearchResults([]);
+        return;
+      }
+      
+      // Fetch conversations in the same organization
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("*, contact:contacts(*)")
+        .neq("id", conversation.id);
+
+      if (error) throw error;
+      
+      if (data) {
+        const filtered = data.filter((c: any) => {
+          if (!c.contact || c.contact.deleted_at) return false;
+          // Verify same organization
+          if (c.contact.organization_id !== orgUser.organization_id) return false;
+          
+          const nameMatch = c.contact.name?.toLowerCase().includes(query.toLowerCase());
+          const phoneMatch = c.contact.phone?.toLowerCase().includes(query.toLowerCase());
+          return nameMatch || phoneMatch;
+        });
+        setSearchResults(filtered);
+      }
+    } catch (err) {
+      console.error("Search merge error:", err);
+      toast.error("Failed to search conversations");
+    } finally {
+      setSearching(false);
+    }
+  }, [conversation]);
+
+  const handleExecuteMerge = useCallback(async () => {
+    if (!conversation || !selectedSourceConv) return;
+    setMerging(true);
+    try {
+      const res = await fetch(`/api/conversations/${conversation.id}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceConversationId: selectedSourceConv.id })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to merge conversations");
+      }
+
+      toast.success("Conversations merged successfully");
+      setMergeModalOpen(false);
+      
+      // Bumps page's resyncToken to reload list and messages
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to merge conversations");
+    } finally {
+      setMerging(false);
+    }
+  }, [conversation, selectedSourceConv, onRefresh]);
 
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
   if (!conversation || !contact) {
     return (
-      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
-          <MessageSquare className="h-8 w-8 text-slate-600" />
+      <div className={cn("relative flex flex-1 flex-col items-center justify-center overflow-hidden", DOODLE_BG_CLASSES)}>
+        <div className="absolute inset-0 bg-[url('/inbox-doodle.svg')] bg-repeat opacity-[0.06] inbox-doodle-overlay pointer-events-none" />
+        <div className="relative z-10 flex flex-col items-center justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
+            <MessageSquare className="h-8 w-8 text-slate-600" />
+          </div>
+          <h3 className="mt-4 text-sm font-medium text-slate-400">
+            Select a conversation
+          </h3>
+          <p className="mt-1 text-xs text-slate-600">
+            Choose a conversation from the left to start messaging
+          </p>
         </div>
-        <h3 className="mt-4 text-sm font-medium text-slate-400">
-          Select a conversation
-        </h3>
-        <p className="mt-1 text-xs text-slate-600">
-          Choose a conversation from the left to start messaging
-        </p>
       </div>
     );
   }
@@ -704,11 +886,13 @@ export function MessageThread({
     : "Assign";
 
   return (
-    <div className={cn("flex flex-1 flex-col", DOODLE_BG_CLASSES)}>
-      {/* Header — solid bg-slate-900 sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <div className={cn("relative flex flex-1 flex-col overflow-hidden", DOODLE_BG_CLASSES)}>
+      <div className="absolute inset-0 bg-[url('/inbox-doodle.svg')] bg-repeat opacity-[0.06] inbox-doodle-overlay pointer-events-none" />
+      <div className="relative z-10 flex flex-1 flex-col min-h-0">
+        {/* Header — solid bg-slate-900 sits on top of the doodle so the
+            name/avatar/dropdowns stay legible. */}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
           {onBack && (
@@ -716,16 +900,16 @@ export function MessageThread({
               type="button"
               onClick={onBack}
               aria-label="Back to conversations"
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 hover:text-white lg:hidden"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-800 hover:text-slate-100 lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-slate-100">
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-white">{displayName}</h2>
+            <h2 className="truncate text-sm font-semibold text-slate-100">{displayName}</h2>
             <p className="truncate text-xs text-slate-400">{contact.phone}</p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
@@ -742,12 +926,9 @@ export function MessageThread({
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Manual refresh — forces a refetch of the messages + the
-              conversation list (the parent bumps its resyncToken). Useful
-              when realtime missed an event or the agent just wants to be
-              sure nothing's stale. Only rendered when the parent wires
-              up `onRefresh`. */}
+        {/* ── Right-side toolbar ───────────────────────────────────────── */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Manual refresh — icon only */}
           {onRefresh && (
             <button
               type="button"
@@ -755,92 +936,150 @@ export function MessageThread({
               disabled={isRefreshing}
               aria-label="Refresh conversation"
               title="Refresh"
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-800 hover:text-white disabled:opacity-60",
-              )}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-60 transition-colors"
             >
-              <RefreshCw
-                className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
-              />
+              <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
             </button>
           )}
 
-          {/* Status dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-slate-800",
-                  currentStatus?.color ?? "text-slate-400"
-                )}>
-                {currentStatus?.label ?? "Status"}
-                <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-slate-700 bg-slate-800"
+          {conversation.status !== "closed" && (
+            <button
+              type="button"
+              onClick={handleToggleBot}
+              title={conversation.is_bot_active ? "AI is replying — click to switch to Human" : "Human mode — click to enable AI"}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-md sm:rounded-full h-8 text-xs font-medium transition-all border",
+                conversation.is_bot_active
+                  ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                  : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-100",
+                "w-8 sm:w-auto px-0 sm:px-3"
+              )}
             >
+              {conversation.is_bot_active ? (
+                <>
+                  <Bot className="h-3.5 w-3.5 animate-pulse" />
+                  <span className="hidden sm:inline">AI</span>
+                </>
+              ) : (
+                <>
+                  <BotOff className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Human</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Contact Details Sheet (mobile only) */}
+          <Sheet>
+            <SheetTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Contact details"
+                  title="Details, Timeline & Tickets"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-100 lg:hidden transition-colors"
+                />
+              }
+            >
+              <Info className="h-4 w-4" />
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[320px] max-w-full p-0 border-l border-slate-800 bg-slate-900 text-slate-100 h-full" showCloseButton={false}>
+              <div className="h-full flex flex-col pt-0">
+                <ContactSidebar
+                  contact={contact}
+                  conversation={conversation}
+                  onRefresh={onRefresh}
+                  isMobile={true}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          {/* ⋯ overflow menu — all secondary actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="More actions"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="border-slate-700 bg-slate-800 min-w-[180px]">
+
+              {/* Resolve / Reopen */}
+              <DropdownMenuItem
+                onClick={handleResolveToggle}
+                className={cn("text-sm gap-2", conversation.status === "closed" ? "text-amber-400" : "text-emerald-400")}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {conversation.status === "closed" ? "Reopen" : "Resolve"}
+              </DropdownMenuItem>
+
+              {/* Escalate */}
+              {conversation.status !== "closed" && (
+                <DropdownMenuItem onClick={handleEscalate} className="text-sm gap-2 text-rose-400">
+                  <Zap className="h-3.5 w-3.5" />
+                  Escalate to Supervisor
+                </DropdownMenuItem>
+              )}
+
+              {/* Merge */}
+              <DropdownMenuItem
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  setSelectedSourceConv(null);
+                  setMergeModalOpen(true);
+                }}
+                className="text-sm gap-2 text-blue-400"
+              >
+                <Combine className="h-3.5 w-3.5" />
+                Merge Conversation
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-slate-700" />
+
+              {/* Status submenu label */}
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Status</div>
               {STATUS_OPTIONS.map((opt) => (
                 <DropdownMenuItem
                   key={opt.value}
                   onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
+                  className={cn("text-sm gap-2", opt.color)}
                 >
+                  {conversation.status === opt.value && <Check className="h-3 w-3" />}
+                  {conversation.status !== opt.value && <span className="h-3 w-3" />}
                   {opt.label}
                 </DropdownMenuItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
 
-          {/* Assign dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-slate-800",
-                assignedAgentId ? "text-primary" : "text-slate-400"
-              )}
-            >
-              <UserPlus className="h-3 w-3" />
-              <span className="hidden sm:inline">{assignLabel}</span>
-              <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-slate-700 bg-slate-800"
-            >
+              <DropdownMenuSeparator className="bg-slate-700" />
+
+              {/* Assign */}
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Assign to</div>
               {profiles.length === 0 ? (
                 <DropdownMenuItem disabled className="text-sm text-slate-500">
-                  No teammates available
+                  No teammates
                 </DropdownMenuItem>
               ) : (
                 profiles.map((p) => {
-                  const isSelected = p.user_id === assignedAgentId;
+                  const isSelected = p.user_id === conversation.assigned_agent_id;
                   return (
                     <DropdownMenuItem
                       key={p.id}
                       onClick={() => handleAssignChange(p.user_id)}
-                      className={cn(
-                        "text-sm",
-                        isSelected ? "text-primary" : "text-slate-300"
-                      )}
+                      className={cn("text-sm gap-2", isSelected ? "text-primary" : "text-slate-300")}
                     >
-                      <span className="flex-1">
-                        {p.full_name}
-                        {p.user_id === user?.id ? " (me)" : ""}
-                      </span>
-                      {isSelected && <Check className="ml-2 h-3 w-3" />}
+                      {isSelected ? <Check className="h-3 w-3" /> : <span className="h-3 w-3" />}
+                      {p.full_name}{p.user_id === user?.id ? " (me)" : ""}
                     </DropdownMenuItem>
                   );
                 })
               )}
-              {assignedAgentId && (
-                <>
-                  <DropdownMenuSeparator className="bg-slate-700" />
-                  <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
-                    className="text-sm text-slate-400"
-                  >
-                    Unassign
-                  </DropdownMenuItem>
-                </>
+              {conversation.assigned_agent_id && (
+                <DropdownMenuItem onClick={() => handleAssignChange(null)} className="text-sm gap-2 text-slate-400">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Unassign
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -935,6 +1174,129 @@ export function MessageThread({
         onOpenChange={setTemplateModalOpen}
         onSelect={handleSendTemplate}
       />
+
+      {/* Merge Conversations Modal */}
+      <Dialog open={mergeModalOpen} onOpenChange={setMergeModalOpen}>
+        <DialogContent className="border-slate-800 bg-slate-900 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-white">
+              Merge Conversations
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
+              Search for another customer/conversation in your organization to merge into this one. This action is permanent and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!selectedSourceConv ? (
+            <div className="space-y-4 py-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search contact name or phone..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    handleSearchMergeContacts(e.target.value);
+                  }}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-primary/50"
+                />
+              </div>
+
+              <ScrollArea className="h-48 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                {searching ? (
+                  <div className="flex h-full items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="flex h-full items-center justify-center py-8 text-xs text-slate-500">
+                    {searchQuery.trim() ? "No matching conversations found" : "Type to search..."}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {searchResults.map((c) => {
+                      const name = c.contact?.name || c.contact?.phone || "Unknown";
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setSelectedSourceConv(c)}
+                          className="flex cursor-pointer items-center justify-between rounded-md p-2 hover:bg-slate-800"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold">{name}</p>
+                            <p className="text-[10px] text-slate-400">{c.contact?.phone}</p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] border-slate-700 capitalize">
+                            {c.status}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2 text-xs">
+              <div className="rounded-lg bg-amber-500/10 p-3 border border-amber-500/20 text-amber-300">
+                <p className="font-semibold text-sm">Confirm Merge Action</p>
+                <p className="mt-1 text-slate-300">
+                  You are merging all messages, notes, and tags from:
+                </p>
+                <p className="mt-2 font-bold text-sm text-white">
+                  {selectedSourceConv.contact?.name || selectedSourceConv.contact?.phone} ({selectedSourceConv.contact?.phone})
+                </p>
+                <p className="mt-2 text-slate-300">
+                  into the current conversation for:
+                </p>
+                <p className="mt-1 font-bold text-sm text-white">
+                  {displayName} ({contact.phone})
+                </p>
+                <p className="mt-3 text-slate-300">
+                  This will:
+                </p>
+                <ul className="list-disc pl-4 mt-1 space-y-1 text-slate-300">
+                  <li>Move all messages from the source conversation to this one.</li>
+                  <li>Move all contact notes to the destination contact.</li>
+                  <li>Merge all tags (ignoring duplicates).</li>
+                  <li>Delete the source conversation and soft-delete the source contact.</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedSourceConv(null)}
+                  disabled={merging}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleExecuteMerge}
+                  disabled={merging}
+                >
+                  {merging ? "Merging..." : "Confirm & Merge"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!selectedSourceConv && (
+            <DialogFooter className="sm:justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMergeModalOpen(false)}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+      </div>
     </div>
   );
 }

@@ -20,10 +20,13 @@ import {
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/inbox": "Inbox",
+  "/tickets": "Tickets",
   "/contacts": "Contacts",
   "/pipelines": "Pipelines",
   "/broadcasts": "Broadcasts",
   "/automations": "Automations",
+  "/knowledge": "Knowledge Base",
+  "/agents": "Agent Manager",
   "/settings": "Settings",
 };
 

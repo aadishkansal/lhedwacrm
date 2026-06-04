@@ -102,7 +102,7 @@ function Bars({
               x2={VB_W - PADDING.right}
               y1={y}
               y2={y}
-              stroke="rgb(30 41 59)"
+              stroke="var(--color-slate-800)"
               strokeDasharray="3 3"
             />
             <text
@@ -127,7 +127,7 @@ function Bars({
             x2={VB_W - PADDING.right}
             y1={yFor(thresholdMinutes)}
             y2={yFor(thresholdMinutes)}
-            stroke="rgb(244 63 94)"
+            stroke="var(--destructive)"
             strokeDasharray="4 4"
             strokeWidth={1.25}
             opacity={0.8}
@@ -158,7 +158,7 @@ function Bars({
               width={barW}
               height={muted ? 2 : Math.max(1, h)}
               rx={4}
-              fill={muted ? 'rgb(51 65 85)' : '#7c3aed'}
+              fill={muted ? 'var(--color-slate-700)' : 'var(--primary)'}
               opacity={muted ? 0.6 : 1}
             >
               <title>

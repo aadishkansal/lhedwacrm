@@ -195,7 +195,7 @@ export function TagManager() {
                   {tag.name}
                   <button
                     onClick={() => confirmDelete(tag)}
-                    className="ml-0.5 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/10"
+                    className="ml-0.5 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-current/10"
                   >
                     <X className="size-3" />
                   </button>

@@ -488,6 +488,18 @@ export default function InboxPage() {
     [activeConversation]
   );
 
+  const handleBotActiveChange = useCallback(
+    (conversationId: string, isBotActive: boolean) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, is_bot_active: isBotActive } : c))
+      );
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation((prev) => (prev ? { ...prev, is_bot_active: isBotActive } : prev));
+      }
+    },
+    [activeConversation]
+  );
+
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
   // conversation slides the thread in; the thread's back button pops
@@ -496,7 +508,7 @@ export default function InboxPage() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (
@@ -549,13 +561,16 @@ export default function InboxPage() {
             onBack={handleCloseConversation}
             resyncToken={resyncToken}
             onRefresh={handleManualRefresh}
+            onBotActiveChange={handleBotActiveChange}
           />
         </div>
 
         {/* Right panel: Contact sidebar — desktop only. */}
-        <div className="hidden lg:block">
-          <ContactSidebar contact={activeContact} />
-        </div>
+        {activeContact && (
+          <div className="hidden lg:flex lg:shrink-0">
+            <ContactSidebar contact={activeContact} conversation={activeConversation} />
+          </div>
+        )}
       </div>
     </div>
   );

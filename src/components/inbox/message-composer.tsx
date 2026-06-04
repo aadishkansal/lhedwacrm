@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useCallback, KeyboardEvent } from "react";
-import { Send, LayoutTemplate } from "lucide-react";
+import { useState, useRef, useCallback, KeyboardEvent, useEffect } from "react";
+import { Send, LayoutTemplate, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReplyQuote } from "./reply-quote";
+import { toast } from "sonner";
 
 interface ReplyDraft {
   /** Internal UUID of the message being replied to — sent back through onSend. */
@@ -32,6 +33,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(() => {
@@ -41,6 +43,21 @@ export function MessageComposer({
     // Max 4 lines (~96px)
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   }, []);
+
+  // Listen for text injection events from other components (like suggested replies)
+  useEffect(() => {
+    const handleSetText = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && typeof customEvent.detail === "string") {
+        setText(customEvent.detail);
+        setTimeout(adjustHeight, 0);
+      }
+    };
+    window.addEventListener("message-composer:set-text", handleSetText);
+    return () => {
+      window.removeEventListener("message-composer:set-text", handleSetText);
+    };
+  }, [adjustHeight]);
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
@@ -76,6 +93,34 @@ export function MessageComposer({
     [adjustHeight]
   );
 
+  const handleAISuggest = useCallback(async () => {
+    if (loadingSuggestion || sessionExpired) return;
+    setLoadingSuggestion(true);
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/suggest-reply`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch suggestions");
+      }
+      const data = await res.json();
+      if (data.suggestion) {
+        setText(data.suggestion);
+        // Set height on next tick
+        setTimeout(adjustHeight, 0);
+        toast.success("AI draft suggested!");
+      } else {
+        toast.error("No suggestion returned from AI");
+      }
+    } catch (err: unknown) {
+      console.error(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      toast.error(errMsg || "Failed to fetch reply suggestions");
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  }, [conversationId, loadingSuggestion, sessionExpired, adjustHeight]);
+
   return (
     <div className="border-t border-slate-800 bg-slate-900 p-3">
       {replyTo && (
@@ -105,15 +150,35 @@ export function MessageComposer({
       )}
 
       <div className="flex items-end gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 w-9 shrink-0 p-0 text-slate-400 hover:text-white"
-          onClick={onOpenTemplates}
-          title="Send template"
-        >
-          <LayoutTemplate className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-slate-400 hover:text-white"
+            onClick={onOpenTemplates}
+            title="Send template"
+          >
+            <LayoutTemplate className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-9 w-9 p-0 text-slate-400 hover:text-primary-foreground hover:bg-slate-800",
+              loadingSuggestion && "text-primary animate-pulse"
+            )}
+            onClick={handleAISuggest}
+            disabled={sessionExpired || loadingSuggestion}
+            title="AI Suggest reply"
+          >
+            {loadingSuggestion ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : (
+              <Sparkles className="h-4 w-4 text-purple-400" />
+            )}
+          </Button>
+        </div>
 
         <textarea
           ref={textareaRef}
@@ -145,9 +210,9 @@ export function MessageComposer({
 
       {/* Hint sits outside the flex row so its height doesn't push
           `items-end` buttons below the textarea. Indented to line up
-          under the textarea left edge (w-9 button + gap-2 = 44px). */}
-      <p className="mt-1 pl-11 text-[10px] text-slate-600">
-        Type &apos;/&apos; for quick replies
+          under the textarea left edge (two w-9 buttons + gap-1 + gap-2 = ~84px). */}
+      <p className="mt-1 pl-2 sm:pl-[88px] text-[10px] text-slate-600 text-center sm:text-left">
+        Type &apos;/&apos; for quick replies • Click AI Sparkles for RAG suggestions
       </p>
     </div>
   );

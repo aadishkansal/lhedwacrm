@@ -215,20 +215,20 @@ export default function ContactsPage() {
             Manage your contact list. {totalCount > 0 && `${totalCount} total contacts.`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="w-full sm:w-auto flex items-center gap-2">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            className="flex-1 sm:flex-none justify-center border-slate-700 text-slate-300 hover:bg-slate-800"
           >
-            <Upload className="size-4" />
+            <Upload className="mr-2 size-4" />
             Import
           </Button>
           <Button
             onClick={openAddForm}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="flex-1 sm:flex-none justify-center bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            <Plus className="size-4" />
+            <Plus className="mr-2 size-4" />
             Add Contact
           </Button>
         </div>
@@ -251,7 +251,7 @@ export default function ContactsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-slate-800 overflow-hidden">
+      <div className="rounded-lg border border-slate-800 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-800 hover:bg-transparent">

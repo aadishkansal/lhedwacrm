@@ -95,7 +95,7 @@ function Donut({ data }: { data: PipelineDonutData }) {
     <div className="flex items-center justify-center">
       <svg viewBox={`0 0 ${size} ${size}`} className="h-48 w-48" role="img" aria-label="Pipeline value by stage">
         {/* background ring */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgb(30 41 59)" strokeWidth={ringWidth} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--color-slate-800)" strokeWidth={ringWidth} />
         {segments.map((seg) => (
           <path
             key={seg.id}
@@ -119,7 +119,7 @@ function Donut({ data }: { data: PipelineDonutData }) {
           x={cx}
           y={cy + 14}
           textAnchor="middle"
-          className="fill-white text-[18px] font-semibold tabular-nums"
+          className="fill-foreground text-[18px] font-semibold tabular-nums"
         >
           {formatCurrencyShort(data.totalValue)}
         </text>

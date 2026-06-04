@@ -79,6 +79,7 @@ export interface Conversation {
   unread_count: number;
   created_at: string;
   updated_at: string;
+  is_bot_active: boolean;
   contact?: Contact;
 }
 
@@ -256,7 +257,13 @@ export type AutomationTriggerType =
   | 'new_contact_created'
   | 'conversation_assigned'
   | 'tag_added'
-  | 'time_based';
+  | 'time_based'
+  | 'project_updated'
+  | 'proposal_updated'
+  | 'installation_updated'
+  | 'followup_event'
+  | 'ticket_event'
+  | 'invoice_updated';
 
 export type AutomationStepType =
   | 'send_message'
@@ -269,7 +276,9 @@ export type AutomationStepType =
   | 'wait'
   | 'condition'
   | 'send_webhook'
-  | 'close_conversation';
+  | 'close_conversation'
+  | 'ai_decision'
+  | 'tool_call';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 

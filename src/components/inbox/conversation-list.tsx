@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, UserCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
 import {
@@ -37,10 +38,16 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 };
 
 const FILTER_OPTIONS: { label: string; value: ConversationStatus | "all" }[] = [
-  { label: "All", value: "all" },
+  { label: "All Statuses", value: "all" },
   { label: "Open", value: "open" },
   { label: "Pending", value: "pending" },
   { label: "Closed", value: "closed" },
+];
+
+const ASSIGN_FILTER_OPTIONS = [
+  { label: "All Assignees", value: "all" as const },
+  { label: "Assigned to Me", value: "me" as const },
+  { label: "Unassigned", value: "unassigned" as const },
 ];
 
 export function ConversationList({
@@ -50,22 +57,14 @@ export function ConversationList({
   onConversationsLoaded,
   resyncToken = 0,
 }: ConversationListProps) {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ConversationStatus | "all">("all");
+  const [assignFilter, setAssignFilter] = useState<'all' | 'me' | 'unassigned'>("all");
   const [loading, setLoading] = useState(true);
 
   // Keep the latest callback in a ref so the fetch effect below can
-  // have a stable, empty-dep identity. Previously the fetch useCallback
-  // depended on `onConversationsLoaded`, which depends on the parent's
-  // `deepLinkConvId` — so every URL change (including one the parent
-  // triggered via router.replace after a click) caused a fresh
-  // conversations fetch. That extra refetch was the trigger for the
-  // deep-link auto-select running a second time and wiping the active
-  // thread's messages.
-  // Mutation lives in an effect (not render) per React 19's refs rule;
-  // the fetch runs once on mount so it's fine to read the slightly
-  // older value — the very next render updates the ref for any
-  // subsequent async completion.
+  // have a stable, empty-dep identity.
   const onConversationsLoadedRef = useRef(onConversationsLoaded);
   useEffect(() => {
     onConversationsLoadedRef.current = onConversationsLoaded;
@@ -76,15 +75,15 @@ export function ConversationList({
     let cancelled = false;
 
     (async () => {
+      // Load conversations with contact, contact_tags, and tags nested
       const { data, error } = await supabase
         .from("conversations")
-        .select("*, contact:contacts(*)")
+        .select("*, contact:contacts(*, contact_tags(id, tag_id, tags(*)))")
         .order("last_message_at", { ascending: false });
 
       if (cancelled) return;
 
       if (error) {
-        // Supabase errors have non-enumerable properties — log fields explicitly
         console.error("Failed to fetch conversations:", {
           message: error.message,
           details: error.details,
@@ -102,9 +101,6 @@ export function ConversationList({
     return () => {
       cancelled = true;
     };
-    // `resyncToken` is included so the parent can force a refetch when
-    // the realtime channel reconnects or the tab regains focus — catches
-    // up on any events sent while the WS was disconnected or throttled.
   }, [resyncToken]);
 
   const filtered = useMemo(() => {
@@ -114,18 +110,31 @@ export function ConversationList({
       result = result.filter((c) => c.status === filter);
     }
 
+    if (assignFilter === "me" && user?.id) {
+      result = result.filter((c) => c.assigned_agent_id === user.id);
+    } else if (assignFilter === "unassigned") {
+      result = result.filter((c) => !c.assigned_agent_id);
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
         const name = c.contact?.name?.toLowerCase() ?? "";
         const phone = c.contact?.phone?.toLowerCase() ?? "";
         const lastMsg = c.last_message_text?.toLowerCase() ?? "";
-        return name.includes(q) || phone.includes(q) || lastMsg.includes(q);
+        
+        // Also support searching by tags!
+        const tags = (c.contact as any)?.contact_tags || [];
+        const hasMatchingTag = tags.some((ct: any) => 
+          ct.tags?.name?.toLowerCase().includes(q)
+        );
+
+        return name.includes(q) || phone.includes(q) || lastMsg.includes(q) || hasMatchingTag;
       });
     }
 
     return result;
-  }, [conversations, filter, search]);
+  }, [conversations, filter, assignFilter, search, user?.id]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,49 +151,78 @@ export function ConversationList({
   );
 
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
+  const activeAssignFilter = ASSIGN_FILTER_OPTIONS.find((o) => o.value === assignFilter);
 
   return (
-    // w-full on mobile so the list occupies the whole viewport when it's
-    // the single pane showing; fixed 320px on desktop where it shares the
-    // row with the thread + contact sidebar.
     <div className="flex h-full w-full flex-col border-r border-slate-800 bg-slate-900 lg:w-80">
       {/* Search + Filter */}
-      <div className="space-y-2 border-b border-slate-800 p-3">
+      <div className="space-y-2 border-b border-slate-800 p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             value={search}
             onChange={handleSearchChange}
-            placeholder="Search conversations..."
-            className="border-slate-700 bg-slate-800 pl-9 text-sm text-white placeholder-slate-500 focus:border-primary/50"
+            placeholder="Search name, phone, tag..."
+            className="border-slate-700 bg-slate-800 pl-9 text-sm text-slate-100 placeholder-slate-500 focus:border-primary/50"
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
-              {activeFilter?.label ?? "All"}
-              <ChevronDown className="h-3 w-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="border-slate-700 bg-slate-800"
-          >
-            {FILTER_OPTIONS.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => setFilter(opt.value)}
-                className={cn(
-                  "text-sm",
-                  filter === opt.value
-                    ? "text-primary"
-                    : "text-slate-300"
-                )}
-              >
-                {opt.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex gap-2">
+          {/* Status filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-slate-100 rounded-md hover:bg-slate-800">
+                {activeFilter?.label ?? "All Statuses"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    filter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Assignee filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-slate-100 rounded-md hover:bg-slate-800">
+                <UserCheck className="mr-1 h-3 w-3 text-slate-500" />
+                {activeAssignFilter?.label ?? "All Assignees"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {ASSIGN_FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setAssignFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    assignFilter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Conversation Items */}
@@ -239,16 +277,23 @@ function ConversationItem({
       })
     : "";
 
+  const contactTags = useMemo(() => {
+    const rawTags = (contact as any)?.contact_tags || [];
+    return rawTags
+      .filter((ct: any) => ct.tags)
+      .map((ct: any) => ct.tags);
+  }, [contact]);
+
   return (
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-slate-800/50",
+        "flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-slate-800/50 min-w-0",
         isActive && "border-l-2 border-primary bg-slate-800/70"
       )}
     >
       {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-slate-100">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -262,14 +307,32 @@ function ConversationItem({
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-white">
-            {displayName}
-          </span>
+        <div className="flex items-center justify-between gap-2 w-full min-w-0">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-slate-100">
+              {displayName}
+            </div>
+            {contactTags.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {contactTags.map((tag: any) => (
+                  <span
+                    key={tag.id}
+                    className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                    style={{
+                      backgroundColor: `${tag.color}20`,
+                      color: tag.color,
+                    }}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           <span className="shrink-0 text-[10px] text-slate-500">{timeAgo}</span>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-slate-400">
+        <div className="mt-1 flex items-center justify-between gap-2 w-full min-w-0">
+          <p className="truncate text-xs text-slate-400 min-w-0 flex-1">
             {conversation.last_message_text || "No messages yet"}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">

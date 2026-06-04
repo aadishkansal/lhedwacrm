@@ -16,6 +16,7 @@ import type {
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { workflowQueue, DEFAULT_JOB_OPTIONS } from './bullmq-engine'
 
 // ------------------------------------------------------------
 // Public API
@@ -32,6 +33,7 @@ export interface AutomationContext {
   tag_id?: string
   /** Agent the conversation was assigned to, for conversation_assigned. */
   agent_id?: string
+  [key: string]: any
 }
 
 export interface DispatchInput {
@@ -64,12 +66,52 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
     }
     if (!automations || automations.length === 0) return
 
+    // Resolve organization ID
+    let organizationId: string | null = null
+    if (input.contactId) {
+      const { data: contact } = await db
+        .from('contacts')
+        .select('organization_id')
+        .eq('id', input.contactId)
+        .maybeSingle()
+      if (contact?.organization_id) {
+        organizationId = contact.organization_id
+      }
+    }
+
+    if (!organizationId) {
+      const { data: orgUser } = await db
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', input.userId)
+        .limit(1)
+        .maybeSingle()
+      if (orgUser?.organization_id) {
+        organizationId = orgUser.organization_id
+      }
+    }
+
+    if (!organizationId) {
+      organizationId = input.userId
+    }
+
     for (const automation of automations as Automation[]) {
       if (!triggerMatches(automation, input.context)) continue
       try {
-        await executeAutomation(automation, input)
+        await workflowQueue.add(
+          'trigger-workflow',
+          {
+            automationId: automation.id,
+            userId: input.userId,
+            contactId: input.contactId ?? null,
+            triggerType: input.triggerType,
+            context: input.context ?? {},
+            organizationId,
+          },
+          DEFAULT_JOB_OPTIONS
+        )
       } catch (err) {
-        console.error('[automations] execute failed:', automation.id, err)
+        console.error('[automations] BullMQ dispatch failed:', automation.id, err)
       }
     }
   } catch (err) {
@@ -310,6 +352,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         contactId: args.contactId,
         text,
       })
+      if (args.context.invoice_id) {
+        await logInvoiceReminder(
+          args.context.invoice_id as string,
+          args.contactId,
+          args.automation.user_id,
+          db
+        )
+      }
       return `sent via Meta (${whatsapp_message_id})`
     }
 
@@ -344,6 +394,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         language: cfg.language,
         params,
       })
+      if (args.context.invoice_id) {
+        await logInvoiceReminder(
+          args.context.invoice_id as string,
+          args.contactId,
+          args.automation.user_id,
+          db
+        )
+      }
       return `template sent via Meta (${whatsapp_message_id})`
     }
 
@@ -590,4 +648,45 @@ async function markPending(id: string, status: 'done' | 'failed') {
     .from('automation_pending_executions')
     .update({ status })
     .eq('id', id)
+}
+
+async function logInvoiceReminder(invoiceId: string, contactId: string | null, userId: string, db: any) {
+  try {
+    let orgId: string | null = null;
+    if (contactId) {
+      const { data } = await db
+        .from('contacts')
+        .select('organization_id')
+        .eq('id', contactId)
+        .maybeSingle();
+      orgId = data?.organization_id || null;
+    }
+    if (!orgId) {
+      const { data } = await db
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+      orgId = data?.organization_id || userId;
+    }
+
+    const { count } = await db
+      .from('invoice_reminders')
+      .select('id', { count: 'exact', head: true })
+      .eq('invoice_id', invoiceId)
+      .eq('status', 'sent');
+
+    await db.from('invoice_reminders').insert({
+      invoice_id: invoiceId,
+      organization_id: orgId,
+      channel: 'whatsapp',
+      scheduled_at: new Date().toISOString(),
+      sent_at: new Date().toISOString(),
+      reminder_count: (count ?? 0) + 1,
+      status: 'sent',
+    });
+  } catch (err) {
+    console.error('[automations] Failed to log invoice reminder:', err);
+  }
 }

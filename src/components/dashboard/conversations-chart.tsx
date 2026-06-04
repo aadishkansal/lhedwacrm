@@ -207,7 +207,7 @@ function LineSvg({
                 x2={VB_W - PADDING.right}
                 y1={y}
                 y2={y}
-                stroke="rgb(30 41 59)"
+                stroke="var(--color-slate-800)"
                 strokeDasharray="3 3"
               />
               <text
@@ -242,7 +242,7 @@ function LineSvg({
         <path
           d={outgoingPath}
           fill="none"
-          stroke="#7c3aed"
+          stroke="var(--primary)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -265,7 +265,7 @@ function LineSvg({
               x2={hoverX}
               y1={PADDING.top}
               y2={PADDING.top + chartH}
-              stroke="rgb(71 85 105)"
+              stroke="var(--color-slate-400)"
               strokeDasharray="3 3"
             />
             <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
@@ -285,7 +285,7 @@ function LineSvg({
         >
           <div className="font-medium text-white">{longDayLabel(hovered.day)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 text-blue-300">
+            <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-300">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
               {hovered.incoming} incoming
             </span>

@@ -25,9 +25,8 @@ export function AppearancePanel() {
       <div>
         <h2 className="text-lg font-semibold text-white">Color theme</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Pick the accent color used across the app. All themes stay
-          dark — only the primary color (buttons, active nav, badges)
-          changes. Saved to this device.
+          Pick the accent color or theme used across the app. Choose between
+          our dark mode color accents or the new Daylight theme. Saved to this device.
         </p>
       </div>
 

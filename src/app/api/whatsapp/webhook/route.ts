@@ -6,6 +6,7 @@ import { normalizePhone, phonesMatch } from '@/modules/whatsapp/services/phone-u
 import { verifyMetaWebhookSignature } from '@/modules/whatsapp/services/webhook-signature'
 import { runAutomationsForTrigger } from '@/modules/workflows/services/engine'
 import { dispatchInboundToFlows } from '@/modules/workflows/flows/engine'
+import { WhatsAppAssistant } from '@/modules/whatsapp/services/whatsapp-assistant'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -496,6 +497,24 @@ async function processMessage(
   )
   if (!conversation) return
 
+  // Deduplicate: check if message was already processed
+  if (message.id) {
+    const { data: existingMsg, error: lookupError } = await supabaseAdmin()
+      .from('messages')
+      .select('id')
+      .eq('message_id', message.id)
+      .maybeSingle()
+
+    if (lookupError) {
+      console.error('[webhook] Error looking up message for deduplication:', lookupError.message)
+    }
+
+    if (existingMsg) {
+      console.log(`[webhook] Message ${message.id} already processed. Skipping duplicate.`)
+      return
+    }
+  }
+
   // Reactions short-circuit here — they aren't messages. We never insert
   // into `messages`, never bump unread_count, never update last_message_text.
   // Done before parseMessageContent so the media-URL fetch is skipped.
@@ -675,6 +694,21 @@ async function processMessage(
         conversation_id: conversation.id,
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
+  }
+
+  // Trigger AI assistant asynchronously if not consumed by a workflow run
+  if (!flowConsumed) {
+    const assistant = new WhatsAppAssistant()
+    assistant.handleIncomingMessage({
+      userId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      incomingMessageText: inboundText,
+      messageId: message.id,
+      accessToken,
+    }).catch((err) => {
+      console.error('[assistant] execution failed:', err instanceof Error ? err.message : err)
+    })
   }
 }
 
@@ -863,6 +897,26 @@ async function findOrCreateContact(
     return { contact: existingContact, wasCreated: false }
   }
 
+  // Fetch organization_id for this userId
+  const { data: orgUser } = await supabaseAdmin()
+    .from('organization_users')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+
+  let organizationId = orgUser?.organization_id
+
+  if (!organizationId) {
+    // Fallback to first organization in the system if user doesn't have one assigned
+    const { data: firstOrg } = await supabaseAdmin()
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .maybeSingle()
+    organizationId = firstOrg?.id
+  }
+
   // Create new contact
   const { data: newContact, error: createError } = await supabaseAdmin()
     .from('contacts')
@@ -870,6 +924,7 @@ async function findOrCreateContact(
       user_id: userId,
       phone,
       name: name || phone,
+      organization_id: organizationId,
     })
     .select()
     .single()

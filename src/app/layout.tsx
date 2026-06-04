@@ -13,10 +13,10 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "WhatsApp AI Agent",
+    template: "%s — WhatsApp AI Agent",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  description: "Self-hostable WhatsApp AI Agent.",
   robots: {
     index: false,
     follow: false,
@@ -86,9 +86,9 @@ export default function RootLayout({
             position="top-right"
             toastOptions={{
               style: {
-                background: "rgb(30 41 59)",
-                border: "1px solid rgb(51 65 85)",
-                color: "white",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                color: "var(--foreground)",
               },
             }}
           />

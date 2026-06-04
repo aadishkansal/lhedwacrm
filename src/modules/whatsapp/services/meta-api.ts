@@ -226,6 +226,35 @@ export async function sendReactionMessage(
   return { messageId: data.messages[0].id }
 }
 
+export interface MarkMessageAsReadArgs {
+  phoneNumberId: string
+  accessToken: string
+  messageId: string
+}
+
+/**
+ * Mark a WhatsApp message as read to trigger blue double ticks for the customer.
+ */
+export async function markMessageAsRead(args: MarkMessageAsReadArgs): Promise<void> {
+  const { phoneNumberId, accessToken, messageId } = args
+  const url = `${META_API_BASE}/${phoneNumberId}/messages`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId,
+    }),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+}
+
 // ============================================================
 // Interactive (button replies + list messages)
 // ============================================================

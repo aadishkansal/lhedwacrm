@@ -197,11 +197,11 @@ export default function FlowsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-white">Flows</h1>
+            <h1 className="text-2xl font-bold text-white">Flows</h1>
             <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
               Beta
             </span>
@@ -211,9 +211,12 @@ export default function FlowsPage() {
             menus, FAQs, and triage before a human steps in.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New flow
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="w-full sm:w-auto justify-center bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Flow
         </Button>
       </header>
 

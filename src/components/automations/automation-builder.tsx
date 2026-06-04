@@ -24,6 +24,8 @@ import {
   Loader2,
   ArrowDown,
   ArrowUp,
+  Brain,
+  Wrench,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -88,6 +90,8 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   condition: { label: "Condition (If/Else)", icon: GitBranch, border: "border-l-amber-500" },
   send_webhook: { label: "Send Webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "Close Conversation", icon: CircleSlash, border: "border-l-primary" },
+  ai_decision: { label: "AI Decision (Router)", icon: Brain, border: "border-l-fuchsia-500" },
+  tool_call: { label: "Tool Call", icon: Wrench, border: "border-l-primary" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [
@@ -102,6 +106,8 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "condition",
   "send_webhook",
   "close_conversation",
+  "ai_decision",
+  "tool_call",
 ]
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
@@ -925,6 +931,77 @@ function StepEditor({
           Sets the conversation status to &quot;closed&quot;. No configuration needed.
         </p>
       )
+    case "ai_decision":
+      return (
+        <>
+          <FieldBlock label="Prompt Template ID">
+            <Input
+              value={(cfg.prompt_template_id as string) ?? "triage"}
+              onChange={(e) => set({ prompt_template_id: e.target.value })}
+              className="bg-slate-800 text-white"
+            />
+          </FieldBlock>
+          <FieldBlock label="Router Role">
+            <Input
+              value={(cfg.router_role as string) ?? "triage"}
+              onChange={(e) => set({ router_role: e.target.value })}
+              className="bg-slate-800 text-white"
+            />
+          </FieldBlock>
+          <FieldBlock label="Context Variables (comma-separated)">
+            <Input
+              value={Array.isArray(cfg.variables) ? cfg.variables.join(", ") : (cfg.variables as string) ?? ""}
+              onChange={(e) =>
+                set({
+                  variables: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              className="bg-slate-800 text-white"
+              placeholder="e.g. project_status, customer_tier"
+            />
+          </FieldBlock>
+        </>
+      )
+    case "tool_call":
+      return (
+        <>
+          <FieldBlock label="Tool Name">
+            <select
+              value={(cfg.tool_name as string) ?? ""}
+              onChange={(e) => set({ tool_name: e.target.value })}
+              className="w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white"
+            >
+              <option value="">Select a tool...</option>
+              <option value="GetProjectStatus">GetProjectStatus</option>
+              <option value="GetQuotation">GetQuotation</option>
+              <option value="GetInstallationStatus">GetInstallationStatus</option>
+              <option value="GetInvoiceStatus">GetInvoiceStatus</option>
+              <option value="GetFollowups">GetFollowups</option>
+              <option value="CreateSupportTicket">CreateSupportTicket</option>
+              <option value="AssignHumanAgent">AssignHumanAgent</option>
+              <option value="GetCustomerContext">GetCustomerContext</option>
+              <option value="SendWhatsAppMessage">SendWhatsAppMessage</option>
+            </select>
+          </FieldBlock>
+          <FieldBlock label="Tool Arguments (JSON)">
+            <Textarea
+              value={cfg.arguments ? JSON.stringify(cfg.arguments, null, 2) : "{}"}
+              onChange={(e) => {
+                try {
+                  set({ arguments: JSON.parse(e.target.value) });
+                } catch {
+                  // Keep typing, don't set invalid JSON
+                }
+              }}
+              className="min-h-24 bg-slate-800 font-mono text-xs text-white"
+              placeholder='{ "contactId": "{{contact.id}}" }'
+            />
+          </FieldBlock>
+        </>
+      )
     default:
       return null
   }
@@ -957,6 +1034,10 @@ function previewFor(step: BuilderStep): string {
       return `when ${step.step_config.subject ?? "?"}`
     case "send_webhook":
       return (step.step_config.url as string) || "no url"
+    case "ai_decision":
+      return `AI classification router using template: ${step.step_config.prompt_template_id ?? "triage"}`
+    case "tool_call":
+      return `Call Tool: ${step.step_config.tool_name ?? "unspecified"}`
     default:
       return ""
   }

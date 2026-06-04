@@ -116,12 +116,55 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   );
 }
 
+function formatMessageText(text: string | null | undefined) {
+  if (!text) return "";
+
+  // Split by markdown/whatsapp formatting elements:
+  // - ```code```
+  // - *bold*
+  // - _italic_
+  // - ~strikethrough~
+  const parts = text.split(/(\`\`\`[^\`]+\`\`\`|\*[^*]+\*|_[^_]+_|~[^~]+~)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith("```") && part.endsWith("```")) {
+      return (
+        <code key={index} className="rounded bg-slate-800 px-1 py-0.5 font-mono text-xs text-pink-400">
+          {part.slice(3, -3)}
+        </code>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return (
+        <strong key={index} className="font-bold">
+          {part.slice(1, -1)}
+        </strong>
+      );
+    }
+    if (part.startsWith("_") && part.endsWith("_")) {
+      return (
+        <em key={index} className="italic">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    if (part.startsWith("~") && part.endsWith("~")) {
+      return (
+        <del key={index} className="line-through">
+          {part.slice(1, -1)}
+        </del>
+      );
+    }
+    return part;
+  });
+}
+
 function MessageContent({ message }: { message: Message }) {
   switch (message.content_type) {
     case "text":
       return (
         <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text}
+          {formatMessageText(message.content_text)}
         </p>
       );
 
@@ -135,7 +178,7 @@ function MessageContent({ message }: { message: Message }) {
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+              {formatMessageText(message.content_text)}
             </p>
           )}
         </div>
@@ -155,7 +198,7 @@ function MessageContent({ message }: { message: Message }) {
           )}
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+              {formatMessageText(message.content_text)}
             </p>
           )}
         </div>
@@ -199,7 +242,7 @@ function MessageContent({ message }: { message: Message }) {
           </span>
           {message.content_text && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+              {formatMessageText(message.content_text)}
             </p>
           )}
         </div>
@@ -226,7 +269,7 @@ function MessageContent({ message }: { message: Message }) {
             Button reply
           </span>
           <p className="whitespace-pre-wrap break-words text-sm">
-            {message.content_text || "[Interactive reply]"}
+            {formatMessageText(message.content_text || "[Interactive reply]")}
           </p>
         </div>
       );
@@ -235,7 +278,7 @@ function MessageContent({ message }: { message: Message }) {
     default:
       return (
         <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text || "[Unsupported message type]"}
+          {formatMessageText(message.content_text || "[Unsupported message type]")}
         </p>
       );
   }
@@ -278,7 +321,9 @@ export function MessageBubble({
             isAgent ? "justify-end" : "justify-start",
           )}
         >
-          <span className="text-[10px] text-white/60">{time}</span>
+          <span className={cn("text-[10px]", isAgent ? "text-primary-foreground/75" : "text-slate-400")}>
+            {time}
+          </span>
           {isAgent && <StatusIcon status={message.status} />}
         </div>
       </div>

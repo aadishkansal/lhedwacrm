@@ -155,7 +155,7 @@ export default function AutomationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Automations</h1>
           <p className="mt-1 text-sm text-slate-400">
@@ -164,9 +164,9 @@ export default function AutomationsPage() {
         </div>
         <Button
           onClick={() => router.push("/automations/new")}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
+          className="w-full sm:w-auto justify-center bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="mr-2 h-4 w-4" />
           Create Automation
         </Button>
       </div>

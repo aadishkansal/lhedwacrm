@@ -595,7 +595,7 @@ export function FlowBuilder({ initialFlow, initialNodes }: FlowBuilderProps) {
 
   // ---- Render ----
   return (
-    <div className="mx-auto flex h-full max-w-4xl flex-col gap-6 p-6">
+    <div className="mx-auto flex h-full max-w-4xl flex-col gap-6">
       <Header
         state={state}
         setState={setStateDirty}
